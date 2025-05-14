@@ -12,23 +12,26 @@ pipeline {
         stage('Setup Environment Variables') {
             steps {
                 script {
-                    echo "Branch name detected: ${env.BRANCH_NAME}"
+                    def branch = env.GIT_BRANCH?.replaceFirst(/^origin\//, '')
+                    echo "Branch name detected: ${branch}"
+                    env.BRANCH_NAME = branch
 
-                    if (env.BRANCH_NAME == 'main') {
+                    if (branch == 'main') {
                         env.NODE_ENV = 'production'
                         env.EC2_IP = '54.163.72.1'
-                    } else if (env.BRANCH_NAME == 'qa') {
+                    } else if (branch == 'qa') {
                         env.NODE_ENV = 'qa'
                         env.EC2_IP = '3.224.80.215'
-                    } else if (env.BRANCH_NAME == 'develop') {
+                    } else if (branch == 'develop') {
                         env.NODE_ENV = 'development'
                         env.EC2_IP = '18.234.56.3'
                     } else {
-                        error "Branch ${env.BRANCH_NAME} not configured for deployment."
+                        error "Branch ${branch} not configured for deployment."
                     }
                 }
             }
         }
+
 
         stage('Build') {
             steps {
