@@ -12,30 +12,23 @@ pipeline {
         stage('Setup Environment Variables') {
             steps {
                 script {
-                    def branch = sh(script: "git rev-parse --abbrev-ref HEAD", returnStdout: true).trim()
-                    env.BRANCH_NAME = branch
+                    echo "Branch name detected: ${env.BRANCH_NAME}"
 
-                    if (branch == 'main') {
+                    if (env.BRANCH_NAME == 'main') {
                         env.NODE_ENV = 'production'
                         env.EC2_IP = '54.163.72.1'
-                    } else if (branch == 'qa') {
+                    } else if (env.BRANCH_NAME == 'qa') {
                         env.NODE_ENV = 'qa'
                         env.EC2_IP = '3.224.80.215'
-                    } else if (branch == 'develop') {
+                    } else if (env.BRANCH_NAME == 'develop') {
                         env.NODE_ENV = 'development'
                         env.EC2_IP = '18.234.56.3'
                     } else {
-                        error "Branch ${branch} not configured for deployment."
+                        error "Branch ${env.BRANCH_NAME} not configured for deployment."
                     }
                 }
             }
         }
-
-        // stage('Checkout') {
-        //     steps {
-        //         git branch: "${env.BRANCH_NAME}", url: 'https://github.com/daviddlcm/Prueba-de-despliege'
-        //     }
-        // }
 
         stage('Build') {
             steps {
