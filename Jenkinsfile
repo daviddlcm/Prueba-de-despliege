@@ -11,7 +11,7 @@ pipeline {
         DEV_IP = '52.22.151.244'
         QA_IP  = '3.224.80.215'
         PROD_IP = '54.163.72.1'
-        REMOTE_PATH = '/home/ubuntu/node-healthcheck'
+        REMOTE_PATH = '/home/ubuntu/Prueba-de-despliege'
     }
 
     stages {
