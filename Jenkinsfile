@@ -1,65 +1,73 @@
 pipeline {
     agent any
 
+    tools {
+        nodejs 'NodeJS'
+    }
+
     environment {
-        NODE_ENV = ''
         EC2_USER = 'ubuntu'
-        REMOTE_PATH = '/home/ubuntu/Prueba-de-despliege'
         SSH_KEY = credentials('ssh-key-ec2')
+        DEV_IP = '3.92.207.25'
+        QA_IP  = '52.22.151.244'
+        PROD_IP = '54.163.72.1'
+        REMOTE_PATH = '/home/ubuntu/node-healthcheck'
     }
 
     stages {
-        stage('Setup Environment Variables') {
+        stage('Detect Branch') {
             steps {
                 script {
-                    def branch = env.GIT_BRANCH?.replaceFirst(/^origin\//, '')
-                    echo "Branch name detected: ${branch}"
-                    env.BRANCH_NAME = branch
-
-                    if (branch == 'main') {
-                        env.NODE_ENV = 'production'
-                        env.EC2_IP = '54.163.72.1'
-                    } else if (branch == 'qa') {
-                        env.NODE_ENV = 'qa'
-                        env.EC2_IP = '3.224.80.215'
-                    } else if (branch == 'develop') {
-                        env.NODE_ENV = 'development'
-                        env.EC2_IP = '18.234.56.3'
-                    } else {
-                        error "Branch ${branch} not configured for deployment."
-                    }
+                    env.ACTUAL_BRANCH = env.BRANCH_NAME ?: 'main'
+                    echo "🔍 Rama activa: ${env.ACTUAL_BRANCH}"
                 }
-            }
-        }
-
-
-        stage('Build') {
-            steps {
-                sh 'rm -rf node_modules'
-                sh 'npm ci'
             }
         }
 
         stage('Deploy') {
             steps {
-                sh """
-                ssh -i $SSH_KEY -o StrictHostKeyChecking=no $EC2_USER@$EC2_IP '
-                    cd $REMOTE_PATH &&
-                    git pull origin ${env.BRANCH_NAME} &&
-                    npm ci &&
-                    pm2 restart health-api-${env.NODE_ENV} || pm2 start server.js --name health-api-${env.NODE_ENV}
-                '
-                """
-            }
-        }
-    }
+                script {
+                    def ip = env.ACTUAL_BRANCH == 'develop' ? DEV_IP :
+                             env.ACTUAL_BRANCH == 'qa'      ? QA_IP :
+                             env.ACTUAL_BRANCH == 'main'    ? PROD_IP : null
 
-    post {
-        success {
-            echo "✅ Deployment to ${env.NODE_ENV} successful!"
-        }
-        failure {
-            echo "❌ Deployment to ${env.NODE_ENV} failed!"
+                    def pm2_name = "${env.ACTUAL_BRANCH}-health"
+
+                    if (ip == null) {
+                        error "Branch ${env.ACTUAL_BRANCH} no está configurada para despliegue."
+                    }
+
+                    sh """
+                    ssh -i $SSH_KEY -o StrictHostKeyChecking=no $EC2_USER@$ip '
+                        echo "📦 Actualizando sistema..."
+                        sudo apt-get update -y &&
+                        sudo apt-get upgrade -y
+
+                        echo "📥 Verificando Node.js..."
+                        if ! command -v node > /dev/null; then
+                            curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+                            sudo apt-get install -y nodejs
+                        fi
+
+                        echo "📥 Verificando PM2..."
+                        if ! command -v pm2 > /dev/null; then
+                            sudo npm install -g pm2
+                        fi
+
+                        echo "📁 Verificando carpeta de app..."
+                        if [ ! -d "$REMOTE_PATH/.git" ]; then
+                            git clone https://github.com/daviddlcm/Prueba-de-despliege.git $REMOTE_PATH
+                        fi
+
+                        echo "🔁 Pull y deploy..."
+                        cd $REMOTE_PATH &&
+                        git pull origin ${env.ACTUAL_BRANCH} &&
+                        npm ci &&
+                        pm2 restart ${pm2_name} || pm2 start server.js --name ${pm2_name}
+                    '
+                    """
+                }
+            }
         }
     }
 }
